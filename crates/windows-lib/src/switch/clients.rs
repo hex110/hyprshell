@@ -1,6 +1,7 @@
 use crate::icon::set_icon;
 use core_lib::{ClientData, ClientId, MonitorData};
 use relm4::adw::gtk;
+use relm4::gtk::gdk;
 use relm4::adw::prelude::*;
 use relm4::gtk::pango;
 use relm4::prelude::*;
@@ -14,11 +15,13 @@ pub struct Clients {
     pub id: ClientId,
     scale: f64,
     monitor_data: MonitorData,
+    thumbnail: Option<gdk::Texture>,
 }
 
 #[derive(Debug)]
 pub enum ClientsInput {
     SetActive(bool),
+    SetThumbnail(gdk::Texture),
 }
 
 #[derive(Debug)]
@@ -27,6 +30,7 @@ pub struct ClientsInit {
     pub data: ClientData,
     pub id: ClientId,
     pub scale: f64,
+    pub thumbnail: Option<gdk::Texture>,
 }
 
 #[derive(Debug)]
@@ -61,10 +65,24 @@ impl FactoryComponent for Clients {
                         },
                     },
                     set_label_align: 0.5,
-                    #[name(image)]
-                    gtk::Image {
-                        set_css_classes: if self.data.enabled { &["client-image"] } else { &["client-image", "monochrome"] },
-                        set_pixel_size: calc_image_size(self.monitor_data.height, self.monitor_data.width, self.scale),
+                    gtk::Overlay {
+                        #[name(picture)]
+                        gtk::Picture {
+                            set_css_classes: if self.data.enabled { &["client-thumbnail"] } else { &["client-thumbnail", "monochrome"] },
+                            set_content_fit: gtk::ContentFit::Contain,
+                            set_can_shrink: true,
+                            #[watch]
+                            set_paintable: self.thumbnail.as_ref(),
+                            #[watch]
+                            set_visible: self.thumbnail.is_some(),
+                        },
+                        #[name(image)]
+                        add_overlay = &gtk::Image {
+                            set_css_classes: if self.data.enabled { &["client-image"] } else { &["client-image", "monochrome"] },
+                            set_pixel_size: calc_image_size(self.monitor_data.height, self.monitor_data.width, self.scale),
+                            #[watch]
+                            set_visible: self.thumbnail.is_none(),
+                        },
                     }
                 }
             }
@@ -79,6 +97,7 @@ impl FactoryComponent for Clients {
             monitor_data: init.monitor_data,
             id: init.id,
             scale: init.scale,
+            thumbnail: init.thumbnail,
         }
     }
 
@@ -105,6 +124,9 @@ impl FactoryComponent for Clients {
         match message {
             ClientsInput::SetActive(active) => {
                 self.active = active;
+            }
+            ClientsInput::SetThumbnail(texture) => {
+                self.thumbnail = Some(texture);
             }
         }
     }

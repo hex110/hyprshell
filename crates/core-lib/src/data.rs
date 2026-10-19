@@ -43,6 +43,8 @@ pub struct ClientData {
     pub floating: bool,
     pub enabled: bool,
     pub pid: i32,
+    /// Hyprland stable window id, used to match the window to its wayland toplevel handle
+    pub stable_id: String,
 }
 
 #[derive(Debug, Default, Clone)]

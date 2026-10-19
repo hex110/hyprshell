@@ -2017,8 +2017,11 @@ dependencies = [
  "hyprshell-launcher-lib",
  "hyprshell-relm4",
  "regex",
+ "rustix 0.38.44",
  "test-log",
  "tracing",
+ "wayland-client",
+ "wayland-protocols",
 ]
 
 [[package]]

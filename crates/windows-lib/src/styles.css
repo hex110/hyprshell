@@ -51,3 +51,11 @@
     margin-top: 4px;
     margin-bottom: 4px;
 }
+.client-thumbnail {
+    margin: 4px;
+    border-radius: calc(var(--border-radius, 12px) - 4px);
+}
+
+.client-thumbnail.monochrome {
+    opacity: 0.4;
+}

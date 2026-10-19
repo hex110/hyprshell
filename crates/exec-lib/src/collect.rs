@@ -113,6 +113,7 @@ pub fn collect_hypr_data(
                         title: client.title.clone(),
                         floating: client.floating,
                         pid: client.pid,
+                        stable_id: client.stable_id.clone(),
                         enabled: true, // gets updated later
                     },
                 ));

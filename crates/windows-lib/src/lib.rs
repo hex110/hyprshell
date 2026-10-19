@@ -1,3 +1,4 @@
+mod capture;
 mod css;
 mod data;
 mod desktop_map;

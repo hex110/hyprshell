@@ -265,6 +265,9 @@ pub struct Client {
     /// When was this window last focused relatively to other windows? 0 for current, 1 previous, 2 previous before that, etc
     #[serde(rename = "focusHistoryID")]
     pub focus_history_id: i8,
+    /// Stable window id, matches the `ext-foreign-toplevel-list` identifier
+    #[serde(rename = "stableId", default)]
+    pub stable_id: String,
 }
 
 #[derive(Deserialize, Debug)]

@@ -1,22 +1,25 @@
+use crate::capture::{Thumbnail, capture_windows};
 use crate::data::{SortConfig, collect_data};
 use crate::next::{find_next_client, find_next_workspace};
 use crate::shared::{Workspaces, WorkspacesInit, WorkspacesInput};
-use crate::switch::clients::{Clients, ClientsInit};
+use crate::switch::clients::{Clients, ClientsInit, ClientsInput};
 use core_lib::{Active, ByFirst, Direction, HyprlandData, SWITCH_NAMESPACE};
 use exec_lib::switch::{switch_client, switch_workspace};
 use gtk4_layer_shell::{KeyboardMode, Layer, LayerShell};
 use regex::Regex;
 use relm4::adw::glib::ControlFlow;
 use relm4::adw::gtk;
-use relm4::adw::gtk::glib;
+use relm4::adw::gtk::{gio, glib};
 use relm4::adw::prelude::*;
-use relm4::gtk::gdk::Key;
+use relm4::gtk::gdk::{self, Key};
 use relm4::gtk::{EventControllerKey, Orientation, SelectionMode};
 use relm4::prelude::*;
+use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, error, trace};
 
 const KILL_TIMEOUT: Duration = Duration::from_millis(200);
+const THUMBNAIL_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Debug)]
 pub struct SwitchRoot {
@@ -33,6 +36,8 @@ pub struct SwitchRoot {
     items: FactoryVecDeque<Workspaces>,
     /// Factory for non-workspace mode (clients)
     clients_only: FactoryVecDeque<Clients>,
+    /// Thumbnails captured since the switcher was opened, by hyprland stable id
+    thumbnails: HashMap<String, gdk::Texture>,
 }
 
 #[derive(Debug)]
@@ -44,6 +49,7 @@ pub enum SwitchRootInput {
     CloseSwitch(bool),
     CloseCurrentItem,
     ReloadSwitch,
+    Thumbnails(Vec<Thumbnail>),
 }
 
 #[derive(Debug)]
@@ -120,6 +126,7 @@ impl SimpleComponent for SwitchRoot {
             data: SwitchData::default(),
             items,
             clients_only,
+            thumbnails: HashMap::new(),
         };
 
         let itemsw: gtk::FlowBox = model.items.widget().clone();
@@ -155,7 +162,7 @@ impl SimpleComponent for SwitchRoot {
                         .emit(SwitchRootInput::Switch(direction));
                 } else {
                     self.open = true;
-                    self.open_switch(direction);
+                    self.open_switch(direction, &sender);
                 }
             }
             SwitchRootInput::Switch(direction) => {
@@ -180,6 +187,11 @@ impl SimpleComponent for SwitchRoot {
                     trace!("not open");
                 }
                 sender.input_sender().emit(SwitchRootInput::ReloadSwitch);
+            }
+            SwitchRootInput::Thumbnails(thumbnails) => {
+                if self.open {
+                    self.apply_thumbnails(thumbnails);
+                }
             }
             SwitchRootInput::ReloadSwitch => {
                 if self.open {
@@ -215,7 +227,7 @@ impl SwitchRoot {
         }
     }
 
-    fn open_switch(&mut self, direction: Direction) {
+    fn open_switch(&mut self, direction: Direction, sender: &ComponentSender<Self>) {
         let (hypr_data, active_prev) = match collect_data(&SortConfig {
             filter_current_monitor: self.switch.filter_by_current_monitor,
             filter_current_workspace: self.switch.filter_by_current_workspace,
@@ -264,6 +276,73 @@ impl SwitchRoot {
             self.populate_workspace_mode(&hypr_data, self.general.scale, self.data.active);
         } else {
             self.populate_clients_only_mode(&hypr_data, self.general.scale, self.data.active);
+            self.request_thumbnails(&hypr_data, sender);
+        }
+    }
+
+    /// Capture every enabled window on a worker thread, results come back as `Thumbnails`
+    fn request_thumbnails(&self, hypr_data: &HyprlandData, sender: &ComponentSender<Self>) {
+        // card interior: the card size from `Clients` minus frame label and padding
+        let max_size = hypr_data
+            .monitors
+            .iter()
+            .map(|(_, m)| {
+                let card_w = f64::from(m.width) / (15.0 - self.general.scale);
+                let card_h = f64::from(m.height) / (15.0 - self.general.scale);
+                ((card_w - 16.0).max(16.0) as u32, (card_h - 44.0).max(16.0) as u32)
+            })
+            .min()
+            .unwrap_or((256, 144));
+        let stable_ids: Vec<String> = hypr_data
+            .clients
+            .iter()
+            .filter(|(_, c)| c.enabled && !c.stable_id.is_empty())
+            .map(|(_, c)| c.stable_id.clone())
+            .collect();
+        if stable_ids.is_empty() {
+            return;
+        }
+        let input = sender.input_sender().clone();
+        // awaiting on the main context wakes the gtk loop, a plain thread + sender does not
+        trace!("requesting thumbnails");
+        let capture = gio::spawn_blocking(move || capture_windows(&stable_ids, max_size, THUMBNAIL_TIMEOUT));
+        glib::spawn_future_local(async move {
+            let res = capture.await;
+            trace!("capture future resolved");
+            match res {
+                Ok(Ok(thumbnails)) => input.emit(SwitchRootInput::Thumbnails(thumbnails)),
+                Ok(Err(e)) => tracing::warn!("Failed to capture thumbnails: {e:#}"),
+                Err(_) => tracing::warn!("Thumbnail capture panicked"),
+            }
+        });
+    }
+
+    fn apply_thumbnails(&mut self, thumbnails: Vec<Thumbnail>) {
+        trace!("applying {} thumbnails", thumbnails.len());
+        for thumb in thumbnails {
+            let format = if thumb.has_alpha {
+                gdk::MemoryFormat::B8g8r8a8Premultiplied
+            } else {
+                gdk::MemoryFormat::B8g8r8x8
+            };
+            let texture = gdk::MemoryTexture::new(
+                thumb.width as i32,
+                thumb.height as i32,
+                format,
+                &glib::Bytes::from_owned(thumb.data),
+                thumb.stride,
+            );
+            let texture: gdk::Texture = texture.upcast();
+            for (id, client) in &self.data.hypr_data.clients {
+                if client.stable_id != thumb.stable_id {
+                    continue;
+                }
+                if let Some(idx) = self.clients_only.iter().position(|c| c.id == *id) {
+                    self.clients_only
+                        .send(idx, ClientsInput::SetThumbnail(texture.clone()));
+                }
+            }
+            self.thumbnails.insert(thumb.stable_id, texture);
         }
     }
 
@@ -328,6 +407,7 @@ impl SwitchRoot {
                 scale,
                 monitor_data: monitor.clone(),
                 data: client.clone(),
+                thumbnail: self.thumbnails.get(&client.stable_id).cloned(),
             });
         }
         drop(lock);
@@ -417,6 +497,7 @@ impl SwitchRoot {
     fn close_switch(&mut self, do_switch: bool) {
         trace!("Hiding window {:?}", self.window.id());
         self.window.set_visible(false);
+        self.thumbnails.clear();
 
         // Clear UI
         {

@@ -281,6 +281,7 @@ mod tests {
                         #[allow(clippy::map_unwrap_or)]
                         enabled: enabled.map(|s| s >= i).unwrap_or(true),
                         pid: 0,
+                        stable_id: String::new(),
                     },
                 )
             })
