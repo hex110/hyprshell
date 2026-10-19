@@ -3,7 +3,7 @@ use core_lib::{ClientData, ClientId};
 use relm4::adw::gtk;
 use relm4::adw::prelude::*;
 use relm4::factory::Position;
-use relm4::gtk::pango;
+use relm4::gtk::{gdk, pango};
 use relm4::prelude::*;
 
 /// Workspace clients component for Fixed parent (workspace mode)
@@ -14,11 +14,13 @@ pub struct WorkspaceClients {
     pub data: ClientData,
     pub id: ClientId,
     pub scale: f64,
+    thumbnail: Option<gdk::Texture>,
 }
 
 #[derive(Debug)]
 pub enum WorkspaceClientsInput {
     SetActive(bool),
+    SetThumbnail(gdk::Texture),
 }
 
 #[derive(Debug)]
@@ -26,6 +28,7 @@ pub struct WorkspaceClientsInit {
     pub data: ClientData,
     pub id: ClientId,
     pub scale: f64,
+    pub thumbnail: Option<gdk::Texture>,
 }
 
 #[derive(Debug)]
@@ -63,10 +66,24 @@ impl FactoryComponent for WorkspaceClients {
                     },
                 },
                 set_label_align: 0.5,
-                #[name(image)]
-                gtk::Image {
-                    set_css_classes: if self.data.enabled { &["client-image"] } else { &["client-image", "monochrome"] },
-                    set_pixel_size: calc_image_size(self.data.height, self.data.width, self.scale),
+                gtk::Overlay {
+                    #[name(picture)]
+                    gtk::Picture {
+                        set_css_classes: if self.data.enabled { &["client-thumbnail"] } else { &["client-thumbnail", "monochrome"] },
+                        set_content_fit: gtk::ContentFit::Contain,
+                        set_can_shrink: true,
+                        #[watch]
+                        set_paintable: self.thumbnail.as_ref(),
+                        #[watch]
+                        set_visible: self.thumbnail.is_some(),
+                    },
+                    #[name(image)]
+                    add_overlay = &gtk::Image {
+                        set_css_classes: if self.data.enabled { &["client-image"] } else { &["client-image", "monochrome"] },
+                        set_pixel_size: calc_image_size(self.data.height, self.data.width, self.scale),
+                        #[watch]
+                        set_visible: self.thumbnail.is_none(),
+                    },
                 }
             }
         }
@@ -79,6 +96,7 @@ impl FactoryComponent for WorkspaceClients {
             data: init.data,
             id: init.id,
             scale: init.scale,
+            thumbnail: init.thumbnail,
         }
     }
 
@@ -105,6 +123,9 @@ impl FactoryComponent for WorkspaceClients {
         match message {
             WorkspaceClientsInput::SetActive(active) => {
                 self.active = active;
+            }
+            WorkspaceClientsInput::SetThumbnail(texture) => {
+                self.thumbnail = Some(texture);
             }
         }
     }

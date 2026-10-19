@@ -231,6 +231,7 @@ in
             "current_workspace"
           ])) [ "current_monitor" ];
           switch_workspaces = mkOpt "Switch workspaces" bool false;
+          show_thumbnails = mkOpt "Show window thumbnails" bool true;
           kill_key = mkOpt "Key to kill window" str "q";
           exclude_workspaces = mkOpt "Exclude workspaces regex" str "";
         };
@@ -248,6 +249,7 @@ in
             "current_workspace"
           ])) [ "current_monitor" ];
           switch_workspaces = mkOpt "Switch workspaces" bool false;
+          show_thumbnails = mkOpt "Show window thumbnails" bool true;
           kill_key = mkOpt "Key to kill window" str "q";
           exclude_workspaces = mkOpt "Exclude workspaces regex" str "";
         };

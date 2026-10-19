@@ -276,40 +276,46 @@ impl SwitchRoot {
             self.populate_workspace_mode(&hypr_data, self.general.scale, self.data.active);
         } else {
             self.populate_clients_only_mode(&hypr_data, self.general.scale, self.data.active);
-            self.request_thumbnails(&hypr_data, sender);
         }
+        self.request_thumbnails(&hypr_data, sender);
     }
 
     /// Capture every enabled window on a worker thread, results come back as `Thumbnails`
     fn request_thumbnails(&self, hypr_data: &HyprlandData, sender: &ComponentSender<Self>) {
-        // card interior: the card size from `Clients` minus frame label and padding
-        let max_size = hypr_data
-            .monitors
-            .iter()
-            .map(|(_, m)| {
-                let card_w = f64::from(m.width) / (15.0 - self.general.scale);
-                let card_h = f64::from(m.height) / (15.0 - self.general.scale);
-                ((card_w - 16.0).max(16.0) as u32, (card_h - 44.0).max(16.0) as u32)
-            })
-            .min()
-            .unwrap_or((256, 144));
-        let stable_ids: Vec<String> = hypr_data
+        if !self.switch.show_thumbnails {
+            return;
+        }
+        // card interior: the card size from `Clients`/`WorkspaceClients` minus frame label and padding
+        let divisor = 15.0 - self.general.scale;
+        let interior = |w: f64, h: f64| {
+            (
+                ((w / divisor) - 16.0).max(16.0) as u32,
+                ((h / divisor) - 44.0).max(16.0) as u32,
+            )
+        };
+        let requests: Vec<(String, (u32, u32))> = hypr_data
             .clients
             .iter()
             .filter(|(_, c)| c.enabled && !c.stable_id.is_empty())
-            .map(|(_, c)| c.stable_id.clone())
+            .filter_map(|(_, c)| {
+                let size = if self.switch.switch_workspaces {
+                    interior(f64::from(c.width), f64::from(c.height))
+                } else {
+                    let (_, m) = hypr_data.monitors.iter().find(|(id, _)| *id == c.monitor)?;
+                    interior(f64::from(m.width), f64::from(m.height))
+                };
+                Some((c.stable_id.clone(), size))
+            })
             .collect();
-        if stable_ids.is_empty() {
+        if requests.is_empty() {
             return;
         }
+        trace!("requesting thumbnails");
         let input = sender.input_sender().clone();
         // awaiting on the main context wakes the gtk loop, a plain thread + sender does not
-        trace!("requesting thumbnails");
-        let capture = gio::spawn_blocking(move || capture_windows(&stable_ids, max_size, THUMBNAIL_TIMEOUT));
+        let capture = gio::spawn_blocking(move || capture_windows(&requests, THUMBNAIL_TIMEOUT));
         glib::spawn_future_local(async move {
-            let res = capture.await;
-            trace!("capture future resolved");
-            match res {
+            match capture.await {
                 Ok(Ok(thumbnails)) => input.emit(SwitchRootInput::Thumbnails(thumbnails)),
                 Ok(Err(e)) => tracing::warn!("Failed to capture thumbnails: {e:#}"),
                 Err(_) => tracing::warn!("Thumbnail capture panicked"),
@@ -337,7 +343,16 @@ impl SwitchRoot {
                 if client.stable_id != thumb.stable_id {
                     continue;
                 }
-                if let Some(idx) = self.clients_only.iter().position(|c| c.id == *id) {
+                if self.switch.switch_workspaces {
+                    if let Some(idx) = self
+                        .items
+                        .iter()
+                        .position(|w| w.workspace_id == client.workspace)
+                    {
+                        self.items
+                            .send(idx, WorkspacesInput::SetThumbnail(*id, texture.clone()));
+                    }
+                } else if let Some(idx) = self.clients_only.iter().position(|c| c.id == *id) {
                     self.clients_only
                         .send(idx, ClientsInput::SetThumbnail(texture.clone()));
                 }
@@ -377,6 +392,7 @@ impl SwitchRoot {
                 data: workspace_data.clone(),
                 scale,
                 clients: workspace_clients,
+                thumbnails: self.thumbnails.clone(),
             });
         }
         drop(lock);

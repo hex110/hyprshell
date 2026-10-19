@@ -638,6 +638,9 @@ impl SimpleComponent for Root {
                         SwitchOutput::SwitchWorkspaces(enabled) => {
                             r#ref.switch.switch_workspaces = enabled;
                         }
+                        SwitchOutput::ShowThumbnails(enabled) => {
+                            r#ref.switch.show_thumbnails = enabled;
+                        }
                         SwitchOutput::ExcludeWorkspaces(exclude_special_workspaces) => {
                             r#ref.switch.exclude_workspaces = exclude_special_workspaces;
                         }
@@ -672,6 +675,9 @@ impl SimpleComponent for Root {
                         }
                         SwitchOutput::SwitchWorkspaces(enabled) => {
                             r#ref.switch_2.switch_workspaces = enabled;
+                        }
+                        SwitchOutput::ShowThumbnails(enabled) => {
+                            r#ref.switch_2.show_thumbnails = enabled;
                         }
                         SwitchOutput::ExcludeWorkspaces(exclude_workspaces) => {
                             r#ref.switch_2.exclude_workspaces = exclude_workspaces;

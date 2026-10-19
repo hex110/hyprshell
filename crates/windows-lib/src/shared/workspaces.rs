@@ -4,6 +4,8 @@ use crate::shared::workspace_clients::{
 use core_lib::{ClientData, ClientId, MonitorData, WorkspaceData, WorkspaceId};
 use regex::Regex;
 use relm4::adw::gtk;
+use relm4::gtk::gdk;
+use std::collections::HashMap;
 use relm4::adw::prelude::*;
 use relm4::prelude::*;
 
@@ -23,6 +25,7 @@ pub struct Workspaces {
 pub enum WorkspacesInput {
     SetActive(bool),
     SetActiveClient(ClientId),
+    SetThumbnail(ClientId, gdk::Texture),
 }
 
 #[derive(Debug)]
@@ -33,6 +36,8 @@ pub struct WorkspacesInit {
     pub remove_html: Regex,
     pub scale: f64,
     pub clients: Vec<(ClientId, ClientData)>,
+    /// Already captured thumbnails by hyprland stable id
+    pub thumbnails: HashMap<String, gdk::Texture>,
 }
 
 #[derive(Debug)]
@@ -103,6 +108,7 @@ impl FactoryComponent for Workspaces {
                         id: *id,
                         scale: init.scale,
                         data: client.clone(),
+                        thumbnail: init.thumbnails.get(&client.stable_id).cloned(),
                     });
                 }
             }
@@ -133,6 +139,12 @@ impl FactoryComponent for Workspaces {
                 for (idx, item) in self.clients.iter().enumerate() {
                     self.clients
                         .send(idx, WorkspaceClientsInput::SetActive(id == item.id));
+                }
+            }
+            WorkspacesInput::SetThumbnail(id, texture) => {
+                if let Some(idx) = self.clients.iter().position(|c| c.id == id) {
+                    self.clients
+                        .send(idx, WorkspaceClientsInput::SetThumbnail(texture));
                 }
             }
         }

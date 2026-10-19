@@ -46,6 +46,7 @@ pub struct Thumbnail {
 #[derive(Default)]
 struct Target {
     stable_id: String,
+    max_size: (u32, u32),
     handle: Option<ExtForeignToplevelHandleV1>,
     session: Option<ExtImageCopyCaptureSessionV1>,
     size: Option<(u32, u32)>,
@@ -64,11 +65,10 @@ struct State {
 }
 
 /// Capture the windows with the given Hyprland stable ids. Windows that can't be captured are
-/// left out of the result. Frames are box-filtered down to fit `max_size`, so the toolkit never
-/// sees a full-resolution texture. Gives up after `timeout`.
+/// left out of the result. Each frame is box-filtered down to fit the max size given with its id,
+/// so the toolkit never sees a full-resolution texture. Gives up after `timeout`.
 pub fn capture_windows(
-    stable_ids: &[String],
-    max_size: (u32, u32),
+    requests: &[(String, (u32, u32))],
     timeout: Duration,
 ) -> anyhow::Result<Vec<Thumbnail>> {
     let deadline = Instant::now() + timeout;
@@ -96,9 +96,10 @@ pub fn capture_windows(
         state.toplevels.iter().map(|(_, id)| id).collect::<Vec<_>>()
     );
 
-    for id in stable_ids {
+    for (id, max_size) in requests {
         let mut target = Target {
             stable_id: id.clone(),
+            max_size: *max_size,
             ..Target::default()
         };
         if let Some((handle, _)) = state.toplevels.iter().find(|(_, ident)| ident == id) {
@@ -150,7 +151,7 @@ pub fn capture_windows(
             warn!("reading thumbnail for {}: {e}", target.stable_id);
             continue;
         }
-        let (width, height, stride, data) = downscale(&data, width, height, stride, max_size);
+        let (width, height, stride, data) = downscale(&data, width, height, stride, target.max_size);
         out.push(Thumbnail {
             stable_id: target.stable_id.clone(),
             width,
@@ -432,14 +433,14 @@ mod tests {
     #[test]
     #[ignore = "needs a running compositor"]
     fn capture_live() {
-        let ids: Vec<String> = std::env::var("STABLE_IDS")
+        let ids: Vec<(String, (u32, u32))> = std::env::var("STABLE_IDS")
             .unwrap()
             .split(',')
-            .map(str::to_owned)
+            .map(|id| (id.to_owned(), (520, 190)))
             .collect();
         let out = std::env::var("OUT").unwrap();
         let start = Instant::now();
-        let thumbs = capture_windows(&ids, (520, 190), Duration::from_secs(3)).unwrap();
+        let thumbs = capture_windows(&ids, Duration::from_secs(3)).unwrap();
         println!("captured {}/{} in {:?}", thumbs.len(), ids.len(), start.elapsed());
         for t in thumbs {
             println!("{} {}x{} alpha={}", t.stable_id, t.width, t.height, t.has_alpha);

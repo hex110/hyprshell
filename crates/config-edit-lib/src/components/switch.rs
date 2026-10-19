@@ -42,6 +42,7 @@ pub enum SwitchOutput {
     FilterWorkspace(bool),
     FilterMonitor(bool),
     SwitchWorkspaces(bool),
+    ShowThumbnails(bool),
     ExcludeWorkspaces(String),
     KillKey(char),
 }
@@ -214,6 +215,26 @@ impl SimpleComponent for Switch {
                         #[block_signal(h_5)]
                         set_active: model.config.switch_workspaces,
                         connect_active_notify[sender] => move |e| { sender.output_sender().emit(SwitchOutput::SwitchWorkspaces(e.is_active())); } @h_5,
+                        set_valign: Align::Center,
+                    },
+                },
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Horizontal,
+                    set_spacing: 10,
+                    gtk::Label {
+                        set_label: "Show thumbnails",
+                        #[watch]
+                        set_css_classes: if model.config.show_thumbnails == model.prev_config.show_thumbnails { &[] } else { &["blue-label"] },
+                    },
+                    gtk::Image::from_icon_name("dialog-information-symbolic") {
+                        set_cursor_by_name: "help",
+                        set_tooltip_text: Some("Show a screenshot of each window instead of its icon")
+                    },
+                    gtk::Switch {
+                        #[watch]
+                        #[block_signal(h_thumb)]
+                        set_active: model.config.show_thumbnails,
+                        connect_active_notify[sender] => move |e| { sender.output_sender().emit(SwitchOutput::ShowThumbnails(e.is_active())); } @h_thumb,
                         set_valign: Align::Center,
                     },
                 },

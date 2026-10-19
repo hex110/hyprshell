@@ -366,6 +366,19 @@ pub fn generate_items(changes: &gtk::ListBox, config: &Config, prev_config: &Con
                             ),
                         );
                     }
+                    if prev_config.windows.switch.show_thumbnails
+                        != config.windows.switch.show_thumbnails
+                    {
+                        add_info_subtitle(
+                            changes,
+                            "Changed switch show thumbnails",
+                            format!(
+                                "{} -> {}",
+                                prev_config.windows.switch.show_thumbnails,
+                                config.windows.switch.show_thumbnails
+                            ),
+                        );
+                    }
                     if prev_config.windows.switch.exclude_workspaces
                         != config.windows.switch.exclude_workspaces
                     {
@@ -461,6 +474,19 @@ pub fn generate_items(changes: &gtk::ListBox, config: &Config, prev_config: &Con
                                 "{} -> {}",
                                 prev_config.windows.switch_2.switch_workspaces,
                                 config.windows.switch_2.switch_workspaces
+                            ),
+                        );
+                    }
+                    if prev_config.windows.switch_2.show_thumbnails
+                        != config.windows.switch_2.show_thumbnails
+                    {
+                        add_info_subtitle(
+                            changes,
+                            "Changed switch show thumbnails",
+                            format!(
+                                "{} -> {}",
+                                prev_config.windows.switch_2.show_thumbnails,
+                                config.windows.switch_2.show_thumbnails
                             ),
                         );
                     }

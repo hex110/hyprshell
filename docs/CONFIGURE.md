@@ -103,6 +103,7 @@ This mode displays the windows sorted by their most recent access. This option i
     - **current_workspace:** Only includes windows of the current workspace.
     - **current_monitor:** Only includes windows of the current monitor.
 - **switch_workspaces:**_[boolean]_ Switch between workspaces in the Switch mode instead of windows.
+- **show_thumbnails:**_[boolean]_ Show a screenshot of each window in the Switch mode instead of its icon (default: `true`). The screenshot is taken once when the Switch mode opens. Needs a compositor with `ext-image-copy-capture` and `ext-foreign-toplevel-list` (Hyprland 0.55+).
 
 # CSS
 

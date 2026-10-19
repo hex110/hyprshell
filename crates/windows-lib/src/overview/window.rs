@@ -179,6 +179,7 @@ impl OverviewWindow {
                 data: workspace_data.clone(),
                 scale,
                 clients: workspace_clients,
+                thumbnails: std::collections::HashMap::new(),
             });
         }
         drop(lock);

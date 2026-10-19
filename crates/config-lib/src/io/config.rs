@@ -191,6 +191,8 @@ pub struct Switch {
     pub exclude_workspaces: Box<str>,
     #[default = 'q']
     pub kill_key: char,
+    #[default = true]
+    pub show_thumbnails: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

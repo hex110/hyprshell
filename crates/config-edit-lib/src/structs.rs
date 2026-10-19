@@ -87,6 +87,7 @@ pub struct Switch {
     pub switch_workspaces: bool,
     pub exclude_workspaces: String,
     pub kill_key: char,
+    pub show_thumbnails: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -227,6 +228,7 @@ impl From<Option<config_lib::Switch>> for Switch {
             switch_workspaces: v.switch_workspaces,
             exclude_workspaces: v.exclude_workspaces.to_string(),
             kill_key: v.kill_key,
+            show_thumbnails: v.show_thumbnails,
         }
     }
 }
@@ -243,6 +245,7 @@ impl From<Switch> for Option<config_lib::Switch> {
                 switch_workspaces: value.switch_workspaces,
                 exclude_workspaces: Box::from(value.exclude_workspaces),
                 kill_key: value.kill_key,
+                show_thumbnails: value.show_thumbnails,
             })
         } else {
             None
