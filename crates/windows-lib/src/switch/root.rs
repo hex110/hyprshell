@@ -36,7 +36,8 @@ pub struct SwitchRoot {
     items: FactoryVecDeque<Workspaces>,
     /// Factory for non-workspace mode (clients)
     clients_only: FactoryVecDeque<Clients>,
-    /// Thumbnails captured since the switcher was opened, by hyprland stable id
+    /// Last captured thumbnail per window, by hyprland stable id. Kept across openings so the
+    /// cards start out with the previous image instead of flashing the icon.
     thumbnails: HashMap<String, gdk::Texture>,
 }
 
@@ -267,6 +268,14 @@ impl SwitchRoot {
             active,
             hypr_data: hypr_data.clone(),
         };
+
+        // drop images of closed windows, or all of them if thumbnails got turned off
+        if self.switch.show_thumbnails {
+            self.thumbnails
+                .retain(|id, _| hypr_data.clients.iter().any(|(_, c)| &c.stable_id == id));
+        } else {
+            self.thumbnails.clear();
+        }
 
         trace!("Showing window {:?}", self.window.id());
         self.window.set_visible(true);
@@ -513,7 +522,6 @@ impl SwitchRoot {
     fn close_switch(&mut self, do_switch: bool) {
         trace!("Hiding window {:?}", self.window.id());
         self.window.set_visible(false);
-        self.thumbnails.clear();
 
         // Clear UI
         {
