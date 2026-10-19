@@ -296,6 +296,7 @@ impl SwitchRoot {
         }
         // card interior: the card size from `Clients`/`WorkspaceClients` minus frame label and padding
         let divisor = 15.0 - self.general.scale;
+        #[allow(clippy::cast_sign_loss)] // clamped to at least 16 above
         let interior = |w: f64, h: f64| {
             (
                 ((w / divisor) - 16.0).max(16.0) as u32,
@@ -335,14 +336,18 @@ impl SwitchRoot {
     fn apply_thumbnails(&mut self, thumbnails: Vec<Thumbnail>) {
         trace!("applying {} thumbnails", thumbnails.len());
         for thumb in thumbnails {
+            let (Ok(width), Ok(height)) = (i32::try_from(thumb.width), i32::try_from(thumb.height))
+            else {
+                continue;
+            };
             let format = if thumb.has_alpha {
                 gdk::MemoryFormat::B8g8r8a8Premultiplied
             } else {
                 gdk::MemoryFormat::B8g8r8x8
             };
             let texture = gdk::MemoryTexture::new(
-                thumb.width as i32,
-                thumb.height as i32,
+                width,
+                height,
                 format,
                 &glib::Bytes::from_owned(thumb.data),
                 thumb.stride,
@@ -359,7 +364,7 @@ impl SwitchRoot {
                         .position(|w| w.workspace_id == client.workspace)
                     {
                         self.items
-                            .send(idx, WorkspacesInput::SetThumbnail(*id, texture.clone()));
+                            .send(idx, WorkspacesInput::ThumbnailReady(*id, texture.clone()));
                     }
                 } else if let Some(idx) = self.clients_only.iter().position(|c| c.id == *id) {
                     self.clients_only

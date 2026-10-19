@@ -28,7 +28,8 @@ pub fn client_label(data: &ClientData) -> gtk::Box {
     label.append(&icon);
 
     let title = data.title.trim();
-    let app_name = get_app_name_by_class(&data.class).map_or_else(|| data.class.clone(), String::from);
+    let app_name =
+        get_app_name_by_class(&data.class).map_or_else(|| data.class.clone(), String::from);
     let app = gtk::Label::new(Some(&app_name));
     app.set_css_classes(&["client-app-name"]);
     app.set_ellipsize(pango::EllipsizeMode::End);

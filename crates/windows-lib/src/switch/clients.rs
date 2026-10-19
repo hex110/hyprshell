@@ -2,8 +2,8 @@ use crate::icon::set_icon;
 use crate::label::client_label;
 use core_lib::{ClientData, ClientId, MonitorData};
 use relm4::adw::gtk;
-use relm4::gtk::gdk;
 use relm4::adw::prelude::*;
+use relm4::gtk::gdk;
 use relm4::prelude::*;
 
 /// Clients component for `FlowBox` parent (non-workspace mode)

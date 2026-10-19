@@ -4,10 +4,10 @@ use crate::shared::workspace_clients::{
 use core_lib::{ClientData, ClientId, MonitorData, WorkspaceData, WorkspaceId};
 use regex::Regex;
 use relm4::adw::gtk;
-use relm4::gtk::gdk;
-use std::collections::HashMap;
 use relm4::adw::prelude::*;
+use relm4::gtk::gdk;
 use relm4::prelude::*;
+use std::collections::HashMap;
 
 /// Workspace items component - displays a workspace with its clients positioned inside
 #[derive(Debug)]
@@ -25,7 +25,7 @@ pub struct Workspaces {
 pub enum WorkspacesInput {
     SetActive(bool),
     SetActiveClient(ClientId),
-    SetThumbnail(ClientId, gdk::Texture),
+    ThumbnailReady(ClientId, gdk::Texture),
 }
 
 #[derive(Debug)]
@@ -141,7 +141,7 @@ impl FactoryComponent for Workspaces {
                         .send(idx, WorkspaceClientsInput::SetActive(id == item.id));
                 }
             }
-            WorkspacesInput::SetThumbnail(id, texture) => {
+            WorkspacesInput::ThumbnailReady(id, texture) => {
                 if let Some(idx) = self.clients.iter().position(|c| c.id == id) {
                     self.clients
                         .send(idx, WorkspaceClientsInput::SetThumbnail(texture));

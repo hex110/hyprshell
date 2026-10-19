@@ -52,13 +52,19 @@ pub fn reload_class_to_icon_map() -> anyhow::Result<()> {
                 );
                 if let Some(wm_class) = &startup_wm_class {
                     names.insert(
-                        (Box::from(wm_class.to_lowercase()), Source::DesktopFileStartupWmClass),
+                        (
+                            Box::from(wm_class.to_lowercase()),
+                            Source::DesktopFileStartupWmClass,
+                        ),
                         Box::from(&**name),
                     );
                 }
                 if let Some(exec_name) = &exec_name {
                     names.insert(
-                        (Box::from(exec_name.to_lowercase()), Source::DesktopFileExecName),
+                        (
+                            Box::from(exec_name.to_lowercase()),
+                            Source::DesktopFileExecName,
+                        ),
                         Box::from(&**name),
                     );
                 }

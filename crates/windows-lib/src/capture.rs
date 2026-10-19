@@ -132,7 +132,15 @@ pub fn capture_windows(
         state
             .targets
             .iter()
-            .map(|t| (&t.stable_id, t.size, t.format, t.session_done, t.started, t.ready, t.failed))
+            .map(|t| (
+                &t.stable_id,
+                t.size,
+                t.format,
+                t.session_done,
+                t.started,
+                t.ready,
+                t.failed
+            ))
             .collect::<Vec<_>>()
     );
     let mut out = Vec::new();
@@ -151,7 +159,8 @@ pub fn capture_windows(
             warn!("reading thumbnail for {}: {e}", target.stable_id);
             continue;
         }
-        let (width, height, stride, data) = downscale(&data, width, height, stride, target.max_size);
+        let (width, height, stride, data) =
+            downscale(&data, width, height, stride, target.max_size);
         out.push(Thumbnail {
             stable_id: target.stable_id.clone(),
             width,
@@ -173,6 +182,7 @@ pub fn capture_windows(
 }
 
 /// Area-average downscale of 4-byte pixels to fit inside `max`, never upscales.
+#[allow(clippy::cast_sign_loss)] // the ratio is in (0, 1], so the scaled sizes are positive
 fn downscale(
     src: &[u8],
     width: u32,
@@ -194,7 +204,8 @@ fn downscale(
         let sy1 = (((u64::from(dy) + 1) * u64::from(height) / u64::from(nh)) as usize).max(sy0 + 1);
         for dx in 0..nw {
             let sx0 = (u64::from(dx) * u64::from(width) / u64::from(nw)) as usize;
-            let sx1 = (((u64::from(dx) + 1) * u64::from(width) / u64::from(nw)) as usize).max(sx0 + 1);
+            let sx1 =
+                (((u64::from(dx) + 1) * u64::from(width) / u64::from(nw)) as usize).max(sx0 + 1);
             let mut acc = [0u32; 4];
             for sy in sy0..sy1 {
                 let row = &src[sy * stride..];
@@ -231,14 +242,14 @@ fn start_capture(
         target.failed = true;
         return Ok(());
     };
-    let stride = width as i32 * 4;
-    let len = i64::from(stride) * i64::from(height);
+    let width = i32::try_from(width).context("capture width")?;
+    let height = i32::try_from(height).context("capture height")?;
+    let stride = width.checked_mul(4).context("capture stride")?;
+    let len = stride.checked_mul(height).context("capture size")?;
 
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR not set")?;
-    let path = std::path::Path::new(&runtime).join(format!(
-        "hyprshell-thumb-{}-{idx}",
-        std::process::id()
-    ));
+    let path = std::path::Path::new(&runtime)
+        .join(format!("hyprshell-thumb-{}-{idx}", std::process::id()));
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -246,15 +257,15 @@ fn start_capture(
         .open(&path)
         .context("creating shm file")?;
     std::fs::remove_file(&path).context("unlinking shm file")?;
-    file.set_len(len as u64)?;
+    file.set_len(u64::try_from(len)?)?;
 
-    let pool = shm.create_pool(file.as_fd(), len as i32, qh, ());
-    let buffer = pool.create_buffer(0, width as i32, height as i32, stride, format, qh, ());
+    let pool = shm.create_pool(file.as_fd(), len, qh, ());
+    let buffer = pool.create_buffer(0, width, height, stride, format, qh, ());
     pool.destroy();
 
     let frame = session.create_frame(qh, idx);
     frame.attach_buffer(&buffer);
-    frame.damage_buffer(0, 0, width as i32, height as i32);
+    frame.damage_buffer(0, 0, width, height);
     frame.capture();
 
     target.file = Some(file);
@@ -335,7 +346,7 @@ impl Dispatch<ExtForeignToplevelListV1, ()> for State {
         state: &mut Self,
         _: &ExtForeignToplevelListV1,
         event: ext_foreign_toplevel_list_v1::Event,
-        _: &(),
+        _data: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -354,7 +365,7 @@ impl Dispatch<ExtForeignToplevelHandleV1, ()> for State {
         state: &mut Self,
         proxy: &ExtForeignToplevelHandleV1,
         event: ext_foreign_toplevel_handle_v1::Event,
-        _: &(),
+        _data: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -427,28 +438,41 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, usize> for State {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::downscale;
 
-    /// Manual: `STABLE_IDS=a,b OUT=/dir cargo test -p hyprshell-windows-lib capture_live -- --ignored --nocapture`
+    fn solid(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {
+        pixel
+            .iter()
+            .copied()
+            .cycle()
+            .take(width as usize * height as usize * 4)
+            .collect()
+    }
+
     #[test]
-    #[ignore = "needs a running compositor"]
-    fn capture_live() {
-        let ids: Vec<(String, (u32, u32))> = std::env::var("STABLE_IDS")
-            .unwrap()
-            .split(',')
-            .map(|id| (id.to_owned(), (520, 190)))
-            .collect();
-        let out = std::env::var("OUT").unwrap();
-        let start = Instant::now();
-        let thumbs = capture_windows(&ids, Duration::from_secs(3)).unwrap();
-        println!("captured {}/{} in {:?}", thumbs.len(), ids.len(), start.elapsed());
-        for t in thumbs {
-            println!("{} {}x{} alpha={}", t.stable_id, t.width, t.height, t.has_alpha);
-            let mut ppm = format!("P6\n{} {}\n255\n", t.width, t.height).into_bytes();
-            for px in t.data.chunks_exact(4) {
-                ppm.extend_from_slice(&[px[2], px[1], px[0]]);
-            }
-            std::fs::write(format!("{out}/{}.ppm", t.stable_id), ppm).unwrap();
-        }
+    fn downscale_never_upscales() {
+        let src = solid(4, 2, [1, 2, 3, 255]);
+        let (w, h, stride, data) = downscale(&src, 4, 2, 16, (100, 100));
+        assert_eq!((w, h, stride), (4, 2, 16));
+        assert_eq!(data, src);
+    }
+
+    #[test]
+    fn downscale_fits_box_and_keeps_aspect() {
+        let src = solid(400, 200, [10, 20, 30, 255]);
+        let (w, h, stride, data) = downscale(&src, 400, 200, 1600, (100, 100));
+        assert_eq!((w, h, stride), (100, 50, 400));
+        assert_eq!(data.len(), 100 * 50 * 4);
+        let pattern = [10, 20, 30, 255];
+        assert!(data.iter().zip(pattern.iter().cycle()).all(|(a, b)| a == b));
+    }
+
+    #[test]
+    fn downscale_averages_blocks() {
+        // left column black, right column white, squeezed into one pixel
+        let src = [0, 0, 0, 255, 200, 200, 200, 255];
+        let (w, h, _, data) = downscale(&src, 2, 1, 8, (1, 1));
+        assert_eq!((w, h), (1, 1));
+        assert_eq!(data, [100, 100, 100, 255]);
     }
 }
